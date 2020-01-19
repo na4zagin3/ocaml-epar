@@ -8,9 +8,9 @@ Longer description
 maintainer: "SAKAMOTO Noriaki <mrty.ityt.pt@gmail.com>"
 authors: "SAKAMOTO Noriaki <mrty.ityt.pt@gmail.com>"
 license: "MIT"
-homepage: "https://github.com/na4zagin3/epar"
-bug-reports: "https://github.com/na4zagin3/epar/issues"
-dev-repo: "git+https://github.com/na4zagin3/epar.git"
+homepage: "https://github.com/na4zagin3/ocaml-epar"
+bug-reports: "https://github.com/na4zagin3/ocaml-epar/issues"
+dev-repo: "git+https://github.com/na4zagin3/ocaml-epar.git"
 depends: [
   "ocaml"
   "dune" {> "1.5"}

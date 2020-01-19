@@ -1,7 +1,7 @@
 (lang dune 1.11)
 (name epar)
-(source (github na4zagin3/epar))
-(license ISC)
+(source (github na4zagin3/ocaml-epar))
+(license MIT)
 (authors "SAKAMOTO Noriaki <mrty.ityt.pt@gmail.com>")
 (maintainers "SAKAMOTO Noriaki <mrty.ityt.pt@gmail.com>")
 
