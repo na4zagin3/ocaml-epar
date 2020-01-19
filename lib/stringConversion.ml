@@ -25,12 +25,14 @@ let section_to_string delimiter section : string =
   ^ String.concat ~sep:"\n" section.content
 
 let example_section1 = {
+  location = None;
   filename = "abc.txt";
   metadata = StringMap.empty;
   content = ["abc"; "def"; "ghi"]
 }
 
 let example_section2 = {
+  location = Some { line = 3 };
   filename = "abc.txt";
   metadata = StringMap.of_alist_exn ["line-break", `String "LF"];
   content = ["abc"; "def"; "ghi"]
@@ -419,10 +421,11 @@ let%expect_test "parse_section_content: ok: non-last section with confusing line
     (Ok ((abc def "" "---! def.txt" abc --- "--- ghi.txt") (8 ("--- xyz.txt")))) |}]
 
 let parse_section delimiter pos lines : section result =
+  let pos_section = pos in
   Or_error.bind (parse_section_header delimiter pos lines) ~f:(fun (filename, (pos, lines)) ->
     Or_error.bind (parse_section_metadata pos lines) ~f:(fun (metadata, (pos, lines)) ->
       Or_error.bind (parse_section_content delimiter pos lines) ~f:(fun (content, (pos, lines)) ->
-        let section = {filename; metadata; content;} in
+        let section = { location = Some { line = pos_section }; filename; metadata; content;} in
         Or_error.return (section, (pos, lines))
       )
     )
@@ -441,7 +444,9 @@ let%expect_test "parse_section: ok: non-last section" =
   |> Sexp.pp_hum Format.std_formatter;
   [%expect{|
     (Ok
-     (((filename def.txt) (metadata ()) (content (abc def))) (5 ("--- def.txt")))) |}]
+     (((location (((line 0)))) (filename def.txt) (metadata ())
+       (content (abc def)))
+      (5 ("--- def.txt")))) |}]
 
 let%expect_test "parse_section: ok: last section" =
   [ "--- def.txt";
@@ -453,7 +458,10 @@ let%expect_test "parse_section: ok: last section" =
   |> [%sexp_of: section result]
   |> Sexp.pp_hum Format.std_formatter;
   [%expect{|
-    (Ok (((filename def.txt) (metadata ()) (content (abc def))) (4 ()))) |}]
+    (Ok
+     (((location (((line 0)))) (filename def.txt) (metadata ())
+       (content (abc def)))
+      (4 ()))) |}]
 
 let%expect_test "parse_section: ok: last section with trailing spaces" =
   [ "--- def.txt";
@@ -466,7 +474,10 @@ let%expect_test "parse_section: ok: last section with trailing spaces" =
   |> [%sexp_of: section result]
   |> Sexp.pp_hum Format.std_formatter;
   [%expect{|
-    (Ok (((filename def.txt) (metadata ()) (content (abc def))) (5 ()))) |}]
+    (Ok
+     (((location (((line 0)))) (filename def.txt) (metadata ())
+       (content (abc def)))
+      (5 ()))) |}]
 
 let%expect_test "parse_section: ok: non-last section with metadata" =
   [ "--- def.txt";
@@ -484,7 +495,7 @@ let%expect_test "parse_section: ok: non-last section with metadata" =
   |> Sexp.pp_hum Format.std_formatter;
   [%expect{|
     (Ok
-     (((filename def.txt)
+     (((location (((line 0)))) (filename def.txt)
        (metadata ((line-break (String CR)) (line-breaks-at-end (Float 2))))
        (content ("" abc def)))
       (7 ("--- def.txt")))) |}]
@@ -518,8 +529,9 @@ let%expect_test "parse_sections: ok: various sections" =
   |> Sexp.pp_hum Format.std_formatter;
   [%expect{|
     (Ok
-     ((((filename abc.txt) (metadata ()) (content (abc def)))
-       ((filename def.txt)
+     ((((location (((line 0)))) (filename abc.txt) (metadata ())
+        (content (abc def)))
+       ((location (((line 5)))) (filename def.txt)
         (metadata ((line-break (String CR)) (line-breaks-at-end (Float 2))))
         (content ("" abc def))))
       (12 ()))) |}]
@@ -563,8 +575,9 @@ let%expect_test "parse_sections: ok: without header metadata" =
     (Ok
      (((metadata ())
        (sections
-        (((filename abc.txt) (metadata ()) (content (abc def)))
-         ((filename def.txt)
+        (((location (((line 2)))) (filename abc.txt) (metadata ())
+          (content (abc def)))
+         ((location (((line 7)))) (filename def.txt)
           (metadata ((line-break (String CR)) (line-breaks-at-end (Float 2))))
           (content ("" abc def))))))
       (14 ()))) |}]
@@ -598,8 +611,9 @@ let%expect_test "parse_sections: ok: specifying a delimiter" =
      (((metadata
         ((defaults (O ((line-breaks-at-end (Float 1))))) (delimiter (String #))))
        (sections
-        (((filename abc.txt) (metadata ()) (content (abc def)))
-         ((filename def.txt)
+        (((location (((line 4)))) (filename abc.txt) (metadata ())
+          (content (abc def)))
+         ((location (((line 10)))) (filename def.txt)
           (metadata ((line-break (String CR)) (line-breaks-at-end (Float 2))))
           (content ("" abc def))))))
       (17 ()))) |}]

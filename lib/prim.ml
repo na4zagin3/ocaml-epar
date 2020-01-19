@@ -1,7 +1,13 @@
 open Core
 
 module StringMap = Map.Make(String)
+
+type location = {
+  line: int
+} [@@deriving sexp]
+
 type section = {
+  location: location option;
   filename: string;
   metadata: Yaml.value StringMap.t;
   content: string list;
