@@ -1,0 +1,22 @@
+opam-version: "2.0"
+name: "epar"
+version: "0.1"
+synopsis: "OCaml implementation of Extensible Plain-text ARchive (EPAR) format"
+description: """
+Longer description
+"""
+maintainer: "SAKAMOTO Noriaki <mrty.ityt.pt@gmail.com>"
+authors: "SAKAMOTO Noriaki <mrty.ityt.pt@gmail.com>"
+license: "MIT"
+homepage: "https://github.com/na4zagin3/epar"
+bug-reports: "https://github.com/na4zagin3/epar/issues"
+dev-repo: "git+https://github.com/na4zagin3/epar.git"
+depends: [
+  "ocaml"
+  "dune" {> "1.5"}
+]
+build: [
+  ["dune" "subst"] {pinned}
+  ["dune" "build" "-p" name "-j" jobs]
+  ["dune" "runtest" "-p" name "-j" jobs] {with-test}
+]
