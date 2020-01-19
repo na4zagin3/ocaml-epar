@@ -8,4 +8,7 @@
 (package
  (name epar)
  (synopsis "OCaml implementation of Extensible Plain-text ARchive (EPAR) format")
- (depends))
+ (depends
+  (dune (> 1.5))
+  (yaml (>= 2.0.0))
+  (ppx_jane (< "v0.14"))))

@@ -14,6 +14,9 @@ dev-repo: "git+https://github.com/na4zagin3/epar.git"
 depends: [
   "ocaml"
   "dune" {> "1.5"}
+  "core" {< "v0.14"}
+  "ppx_jane" {< "v0.14"}
+  "yaml" {>= "2.0.0"}
 ]
 build: [
   ["dune" "subst"] {pinned}
