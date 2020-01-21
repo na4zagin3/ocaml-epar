@@ -11,4 +11,5 @@
  (depends
   (dune (> 1.5))
   (yaml (>= 2.0.0))
+  (qtest (and :test (< "0.13")))
   (ppx_jane (< "v0.14"))))

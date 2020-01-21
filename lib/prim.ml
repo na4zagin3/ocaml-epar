@@ -2,21 +2,27 @@ open Core
 
 module StringMap = Map.Make(String)
 
+module Yaml = struct
+  include Yaml
+  (* TODO Needs efficient implementation*)
+  let compare_value a b = Sexp.compare (Yaml.sexp_of_value a) (Yaml.sexp_of_value b)
+end
+
 type location = {
   line: int
-} [@@deriving sexp]
+} [@@deriving compare, sexp]
 
 type section = {
   location: location option;
   filename: string;
   metadata: Yaml.value StringMap.t;
   content: string list;
-} [@@deriving sexp]
+} [@@deriving compare, sexp]
 
 type archive = {
   metadata: Yaml.value StringMap.t;
   sections: section list;
-} [@@deriving sexp]
+} [@@deriving compare, sexp]
 
 let header_metadata_delimiter_key = "delimiter"
 let section_metadata_linebreak_key = "line-break"

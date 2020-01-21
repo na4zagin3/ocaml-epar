@@ -1,2 +1,4 @@
 (test
- (name epar))
+ (name eparSpec)
+ (preprocess (pps ppx_custom_printf))
+ (libraries epar qcheck yaml))

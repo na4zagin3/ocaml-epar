@@ -16,6 +16,7 @@ depends: [
   "dune" {> "1.5"}
   "core" {< "v0.14"}
   "ppx_jane" {< "v0.14"}
+  "qcheck" {with-test & < "0.13"}
   "yaml" {>= "2.0.0"}
 ]
 build: [
