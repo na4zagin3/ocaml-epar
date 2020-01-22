@@ -13,7 +13,7 @@ type location = {
 } [@@deriving compare, sexp]
 
 type section = {
-  location: location option;
+  location: location option; [@compare.ignore]
   filename: string;
   metadata: Yaml.value StringMap.t;
   content: string list;
@@ -24,8 +24,10 @@ type archive = {
   sections: section list;
 } [@@deriving compare, sexp]
 
+let header_metadata_defaults_key = "defaults"
 let header_metadata_delimiter_key = "delimiter"
 let section_metadata_linebreak_key = "line-break"
+let section_metadata_linebreaksatend_key = "line-breaks-at-end"
 
 let default_delimiter = "---"
 let get_delimiter header_metadata = match Map.find header_metadata header_metadata_delimiter_key with
@@ -34,10 +36,26 @@ let get_delimiter header_metadata = match Map.find header_metadata header_metada
   | None -> Ok default_delimiter
   | Some _-> Error "delimiter value must be an non-empty string"
 
+let get_defaults header_metadata = match Map.find header_metadata header_metadata_defaults_key with
+  | Some (`O o) -> Ok (StringMap.of_alist_exn o)
+  | None -> Ok StringMap.empty
+  | Some _-> Error "defaults value must be an object"
+
 let get_linebreak metadata ~default = match Map.find metadata section_metadata_linebreak_key with
-  | Some (`String "CR") -> Ok "\r"
-  | Some (`String "LF") -> Ok "\n"
-  | Some (`String "CRLF") -> Ok "\r\n"
+  | Some (`String "cr") -> Ok "\r"
+  | Some (`String "lf") -> Ok "\n"
+  | Some (`String "crlf") -> Ok "\r\n"
+  | None -> Ok default
+  | Some _-> Error "line-break value must be one of LF, CR, or CRLF"
+
+let linebreak_symbol = function
+  | "\r" -> "cr"
+  | "\n" -> "lf"
+  | "\r\n" -> "crlf"
+  | c -> failwithf "Line break must be one of %S, %S, or %S, but got %S" "\n" "\r" "\r\n" c ()
+
+let get_linebreaksatend metadata ~default = match Map.find metadata section_metadata_linebreaksatend_key with
+  | Some (`Float f) -> Ok (Float.iround_down_exn f)
   | None -> Ok default
   | Some _-> Error "line-break value must be one of LF, CR, or CRLF"
 
