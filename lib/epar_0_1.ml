@@ -26,7 +26,7 @@ let read_section ~basedir ~defaults filename : section =
   let str = In_channel.with_file ~binary:true path ~f:(fun ich ->
     In_channel.input_all ich
   ) in
-  let first_linebreak_index = String.lfindi ~pos:0 str ~f:(fun _ c -> c = '\r' || c = '\n') in
+  let first_linebreak_index = String.lfindi ~pos:0 str ~f:(fun _ c -> Char.equal c '\r' || Char.equal c  '\n') in
   let linebreak =
     match first_linebreak_index with
       | None -> linebreak_default
@@ -40,7 +40,7 @@ let read_section ~basedir ~defaults filename : section =
   let content = List.rev content_rev in
   let linebreaksatend = List.length trailing_lines + if String.is_suffix ~suffix:linebreak str then 1 else 0 in
   let metadata =
-    [ Option.some_if (linebreak <> linebreak_default) (section_metadata_linebreak_key, `String (linebreak_symbol linebreak));
+    [ Option.some_if (String.equal linebreak linebreak_default |> not) (section_metadata_linebreak_key, `String (linebreak_symbol linebreak));
       Option.some_if (linebreaksatend <> linebreaksatend_default) (section_metadata_linebreaksatend_key, `Float (Int.to_float linebreaksatend));
     ] |> List.map ~f:Option.to_list |> List.concat |> StringMap.of_alist_exn in
   { location = None; filename; content; metadata; }
@@ -71,6 +71,6 @@ let read_archive ~basedir filenames : archive =
   let delimiter = Option.value_exn ~message:"Cannot found a valid delimiter" (List.find ~f:(delimiter_allowed sections) delimiter_candidates) in
   (* TODO find an appropriate delimiter *)
   let metadata =
-    [ Option.some_if (delimiter <> default_delimiter) (header_metadata_delimiter_key, `String delimiter);
+    [ Option.some_if (String.equal delimiter default_delimiter |> not) (header_metadata_delimiter_key, `String delimiter);
     ] |> List.map ~f:Option.to_list |> List.concat |> StringMap.of_alist_exn in
   { metadata; sections; }
