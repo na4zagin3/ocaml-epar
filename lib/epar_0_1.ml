@@ -4,10 +4,14 @@ open Prim
 
 let write_section ~basedir ~defaults (section : section) : unit =
   let path = Filename.concat basedir section.filename in
+  let parent_dir = Filename.dirname path in
   let linebreak_default = get_linebreak defaults ~default:"\n"  in
   let linebreak = Result.(linebreak_default >>= (fun default -> get_linebreak section.metadata ~default)) |> Result.ok_or_failwith in
   let linebreaksatend_default = get_linebreaksatend defaults ~default:1  in
   let linebreaksatend = Result.(linebreaksatend_default >>= (fun default -> get_linebreaksatend section.metadata ~default)) |> Result.ok_or_failwith in
+  begin if FileUtil.(test Is_dir) parent_dir |> not
+  then FileUtil.mkdir ~parent:true parent_dir
+  end;
   Out_channel.with_file ~binary:true path ~f:(fun och ->
     begin match section.content with
       | [] -> ()
