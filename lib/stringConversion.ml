@@ -69,10 +69,27 @@ let to_string archive : string =
   let metadata = if Map.is_empty archive.metadata
     then ""
     else Yaml.to_string_exn (map_to_yaml archive.metadata) ^ "...\n" in
+  let file_sections =
+    String.concat ~sep:"\n\n" (List.map ~f:(section_to_string delimiter) archive.sections)
+  in
+  let file_sections_with_leading_linebreak =
+    if String.is_empty file_sections
+    then ""
+    else "\n" ^ file_sections
+  in
   "#EPAR: 0.1\n"
   ^ metadata
-  ^ "\n"
-  ^ String.concat ~sep:"\n\n" (List.map ~f:(section_to_string delimiter) archive.sections)
+  ^ file_sections_with_leading_linebreak
+
+let%expect_test "to_string: empty" =
+  let archive = {
+    metadata = StringMap.empty;
+    sections = [];
+  } in
+  print_endline (to_string archive);
+  [%expect{|
+    #EPAR: 0.1
+  |}]
 
 let%expect_test "to_string: example without a header metadata" =
   let archive = {
