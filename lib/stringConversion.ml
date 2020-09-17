@@ -159,6 +159,7 @@ let%expect_test "parse_header: error: empty" =
   [%expect{| (Error "line 0: Empty") |}]
 
 let parse_yaml_metadata part pos : string list -> Yaml.value StringMap.t result = function
+  | [] -> Or_error.return (StringMap.empty, (pos, []))
   | "" :: rest -> Or_error.return (StringMap.empty, (pos + 1, rest))
   | lines ->
     match List.split_while lines ~f:(fun x -> not (String.equal "..." x)) with
@@ -550,6 +551,25 @@ let parse_archive pos lines : archive result =
       )
     )
   )
+
+let%expect_test "parse_sections: ok: empty" =
+  [ "#EPAR: 0.1";
+  ]
+  |> parse_archive 0
+  |> [%sexp_of: archive result]
+  |> Sexp.pp_hum Format.std_formatter;
+  [%expect{|
+    (Ok (((metadata ()) (sections ())) (1 ()))) |}]
+
+let%expect_test "parse_sections: ok: empty with trailing empty lines" =
+  [ "#EPAR: 0.1";
+    "";
+  ]
+  |> parse_archive 0
+  |> [%sexp_of: archive result]
+  |> Sexp.pp_hum Format.std_formatter;
+  [%expect{|
+    (Ok (((metadata ()) (sections ())) (2 ()))) |}]
 
 let%expect_test "parse_sections: ok: without header metadata" =
   [ "#EPAR: 0.1";
