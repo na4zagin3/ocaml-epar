@@ -71,6 +71,28 @@ let string_utf8 =
   QCheck.make ~shrink:shrink_string_utf8 ~small:String.length
     ~print:(sprintf "%S") string_utf8_gen
 
+let string_utf8_with_unified_linebreak linebreak =
+  let is_linebreak = function
+    | '\r' | '\n' -> true
+    | _ -> false
+  in
+  let gen =
+    let open QCheck.Gen in
+    list (map (String.filter ~f:is_linebreak) string_utf8_gen)
+    |> map (String.concat ~sep:linebreak)
+  in
+  QCheck.make ~shrink:shrink_string_utf8 ~small:String.length
+    ~print:(sprintf "%S") gen
+
+
+let linebreak_gen =
+  let open QCheck.Gen in
+  oneofa [|"\r"; "\n"; "\r\n"|]
+
+let linebreak =
+  QCheck.make ~print:(sprintf "%S") string_utf8_gen
+
+
 (* TODO Use string_utf8 instead *)
 let yaml_string_gen = QCheck.Gen.(sized @@ fun n -> string_utf8_repeat (min n 10))
 let yaml_string =

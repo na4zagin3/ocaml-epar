@@ -2,25 +2,32 @@ open Core
 
 open Prim
 
-let write_section ~basedir ~defaults (section : section) : unit =
-  let path = Filename.concat basedir section.filename in
-  let parent_dir = Filename.dirname path in
+let write_section_sub ~defaults (section : section) output_string : unit =
   let linebreak_default = get_linebreak defaults ~default:"\n"  in
   let linebreak = Result.(linebreak_default >>= (fun default -> get_linebreak section.metadata ~default)) |> Result.ok_or_failwith in
   let linebreaksatend_default = get_linebreaksatend defaults ~default:1  in
   let linebreaksatend = Result.(linebreaksatend_default >>= (fun default -> get_linebreaksatend section.metadata ~default)) |> Result.ok_or_failwith in
+  begin match section.content with
+    | [] -> ()
+    | [line] -> output_string line
+    | line :: lines ->
+      output_string line;
+      List.iter lines ~f:(fun line -> output_string linebreak; output_string line) end;
+  for _ = 0 to linebreaksatend - 1 do output_string linebreak done
+
+let write_section_to_string ~defaults (section : section) : string =
+  let buffer = Buffer.create 100 in
+  write_section_sub ~defaults section (Buffer.add_string buffer);
+  Buffer.contents buffer
+
+let write_section ~basedir ~defaults (section : section) : unit =
+  let path = Filename.concat basedir section.filename in
+  let parent_dir = Filename.dirname path in
   begin if FileUtil.(test Is_dir) parent_dir |> not
   then FileUtil.mkdir ~parent:true parent_dir
   end;
   Out_channel.with_file ~binary:true path ~f:(fun och ->
-    begin match section.content with
-      | [] -> ()
-      | [line] -> Out_channel.output_string och line
-      | line :: lines ->
-        Out_channel.output_string och line;
-        List.iter lines ~f:(fun line -> Out_channel.output_string och linebreak; Out_channel.output_string och line) end;
-    for _ = 0 to linebreaksatend - 1 do Out_channel.output_string och linebreak done
-  )
+    write_section_sub ~defaults section (Out_channel.output_string och))
 
 let split_lines_rev ~linebreak str =
   let str_length = String.length str in
