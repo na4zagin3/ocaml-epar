@@ -22,32 +22,146 @@ let write_section ~basedir ~defaults (section : section) : unit =
     for _ = 0 to linebreaksatend - 1 do Out_channel.output_string och linebreak done
   )
 
+let split_lines_rev ~linebreak str =
+  let str_length = String.length str in
+  let linebreak_length = String.length linebreak in
+  let linebreaks = String.substr_index_all ~pattern:linebreak ~may_overlap:false str in
+  let rec sub start acc = function
+    | [] ->
+      String.slice str start str_length :: acc
+    | 0 :: es ->
+      sub linebreak_length ("" :: acc) es
+    | e :: es ->
+      sub (e + linebreak_length) (String.slice str start e :: acc) es
+  in
+  sub 0 [] linebreaks
+
 (* TODO Rewrite to handle big files *)
-let read_section ~basedir ~defaults filename : section =
-  let path = Filename.concat basedir filename in
+let read_section_from_string ~defaults ~filename str : section =
   let linebreak_default = get_linebreak defaults ~default:"\n" |> Result.ok_or_failwith in
   let linebreaksatend_default = get_linebreaksatend defaults ~default:1 |> Result.ok_or_failwith in
-  let str = In_channel.with_file ~binary:true path ~f:(fun ich ->
-    In_channel.input_all ich
-  ) in
-  let first_linebreak_index = String.lfindi ~pos:0 str ~f:(fun _ c -> Char.equal c '\r' || Char.equal c  '\n') in
+  let first_linebreak_cr_index = String.index str '\r' in
+  let first_linebreak_lf_index = String.index str '\n' in
   let linebreak =
-    match first_linebreak_index with
-      | None -> linebreak_default
-      | Some first_linebreak_index ->
-        match String.slice str first_linebreak_index (first_linebreak_index + 2) with
-          | "\r\n" as lb -> lb
-          | lb2 -> begin match String.prefix lb2 1 with
-            | ("\r" | "\n") as lb -> lb
-            | _ -> linebreak_default end in
-  let trailing_lines, content_rev = String.split_lines str |> List.rev |> List.split_while ~f:(String.is_empty) in
+    match first_linebreak_cr_index, first_linebreak_lf_index with
+      | None, None -> linebreak_default
+      | Some _, None -> "\r"
+      | None, Some _ -> "\n"
+      | Some n, Some m when n + 1 = m -> "\r\n"
+      | Some n, Some m when n < m -> "\r"
+      | Some n, Some m when n > m -> "\n"
+      | Some _, Some _ ->
+        failwithf "%s: BUG: read_section_from_string" filename ()
+  in
+  let trailing_lines, content_rev = split_lines_rev ~linebreak str |> List.split_while ~f:(String.is_empty) in
   let content = List.rev content_rev in
-  let linebreaksatend = List.length trailing_lines + if String.is_suffix ~suffix:linebreak str then 1 else 0 in
+  let linebreaksatend =
+    let trailing_empty_lines = List.length trailing_lines in
+    if List.is_empty content
+    then trailing_empty_lines - 1
+    else trailing_empty_lines
+  in
   let metadata =
     [ Option.some_if (String.equal linebreak linebreak_default |> not) (section_metadata_linebreak_key, `String (linebreak_symbol linebreak));
       Option.some_if (linebreaksatend <> linebreaksatend_default) (section_metadata_linebreaksatend_key, `Float (Int.to_float linebreaksatend));
     ] |> List.map ~f:Option.to_list |> List.concat |> StringMap.of_alist_exn in
   { location = None; filename; content; metadata; }
+
+let read_section ~basedir ~defaults filename : section =
+  let path = Filename.concat basedir filename in
+  let str = In_channel.with_file ~binary:true path ~f:(fun ich ->
+    In_channel.input_all ich
+  ) in
+  read_section_from_string ~defaults ~filename str
+
+let%expect_test "read_section: ok: empty file" =
+  let defaults = StringMap.empty in
+  ""
+  |> read_section_from_string ~defaults ~filename:"test"
+  |> [%sexp_of: section]
+  |> Sexp.pp_hum Format.std_formatter;
+  [%expect{|
+    ((location ()) (filename test) (metadata ((line-breaks-at-end (Float 0))))
+     (content ())) |}]
+
+let%expect_test "read_section: ok: empty file with lf" =
+  let defaults = StringMap.empty in
+  "\n"
+  |> read_section_from_string ~defaults ~filename:"test"
+  |> [%sexp_of: section]
+  |> Sexp.pp_hum Format.std_formatter;
+  [%expect{|
+    ((location ()) (filename test) (metadata ()) (content ())) |}]
+
+let%expect_test "read_section: ok: empty file with two lfs" =
+  let defaults = StringMap.empty in
+  "\n\n"
+  |> read_section_from_string ~defaults ~filename:"test"
+  |> [%sexp_of: section]
+  |> Sexp.pp_hum Format.std_formatter;
+  [%expect{|
+    ((location ()) (filename test) (metadata ((line-breaks-at-end (Float 2))))
+     (content ())) |}]
+
+let%expect_test "read_section: ok: empty file with cr" =
+  let defaults = StringMap.empty in
+  "\r"
+  |> read_section_from_string ~defaults ~filename:"test"
+  |> [%sexp_of: section]
+  |> Sexp.pp_hum Format.std_formatter;
+  [%expect{|
+    ((location ()) (filename test) (metadata ((line-break (String cr))))
+     (content ())) |}]
+
+let%expect_test "read_section: ok: empty file with crlf" =
+  let defaults = StringMap.empty in
+  "\r\n"
+  |> read_section_from_string ~defaults ~filename:"test"
+  |> [%sexp_of: section]
+  |> Sexp.pp_hum Format.std_formatter;
+  [%expect{|
+    ((location ()) (filename test) (metadata ((line-break (String crlf))))
+     (content ())) |}]
+
+let%expect_test "read_section: ok: empty file with two crlfs" =
+  let defaults = StringMap.empty in
+  "\r\n\r\n"
+  |> read_section_from_string ~defaults ~filename:"test"
+  |> [%sexp_of: section]
+  |> Sexp.pp_hum Format.std_formatter;
+  [%expect{|
+    ((location ()) (filename test)
+     (metadata ((line-break (String crlf)) (line-breaks-at-end (Float 2))))
+     (content ())) |}]
+
+let%expect_test "read_section: ok: text file without linebreaks" =
+  let defaults = StringMap.empty in
+  "abcdef"
+  |> read_section_from_string ~defaults ~filename:"test"
+  |> [%sexp_of: section]
+  |> Sexp.pp_hum Format.std_formatter;
+  [%expect{|
+    ((location ()) (filename test) (metadata ((line-breaks-at-end (Float 0))))
+     (content (abcdef))) |}]
+
+let%expect_test "read_section: ok: text file with a trailing lf" =
+  let defaults = StringMap.empty in
+  "abc\ndef\n"
+  |> read_section_from_string ~defaults ~filename:"test"
+  |> [%sexp_of: section]
+  |> Sexp.pp_hum Format.std_formatter;
+  [%expect{|
+    ((location ()) (filename test) (metadata ()) (content (abc def))) |}]
+
+let%expect_test "read_section: ok: text file without a trailing lf" =
+  let defaults = StringMap.empty in
+  "abc\ndef\nghi"
+  |> read_section_from_string ~defaults ~filename:"test"
+  |> [%sexp_of: section]
+  |> Sexp.pp_hum Format.std_formatter;
+  [%expect{|
+    ((location ()) (filename test) (metadata ((line-breaks-at-end (Float 0))))
+     (content (abc def ghi))) |}]
 
 let write_archive ~basedir (archive : archive) : unit =
   let defaults = get_defaults archive.metadata |> Result.ok_or_failwith in
