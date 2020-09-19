@@ -569,7 +569,7 @@ let parse_archive pos lines : archive result =
     )
   )
 
-let%expect_test "parse_sections: ok: empty" =
+let%expect_test "parse_archive: ok: empty" =
   [ "#EPAR: 0.1";
   ]
   |> parse_archive 0
@@ -578,7 +578,7 @@ let%expect_test "parse_sections: ok: empty" =
   [%expect{|
     (Ok (((metadata ()) (sections ())) (1 ()))) |}]
 
-let%expect_test "parse_sections: ok: empty with trailing empty lines" =
+let%expect_test "parse_archive: ok: empty with a trailing empty line" =
   [ "#EPAR: 0.1";
     "";
   ]
@@ -588,7 +588,7 @@ let%expect_test "parse_sections: ok: empty with trailing empty lines" =
   [%expect{|
     (Ok (((metadata ()) (sections ())) (2 ()))) |}]
 
-let%expect_test "parse_sections: ok: without header metadata" =
+let%expect_test "parse_archive: ok: without header metadata" =
   [ "#EPAR: 0.1";
     "";
     "--- abc.txt";
@@ -619,7 +619,7 @@ let%expect_test "parse_sections: ok: without header metadata" =
           (content ("" abc def))))))
       (14 ()))) |}]
 
-let%expect_test "parse_sections: ok: specifying a delimiter" =
+let%expect_test "parse_archive: ok: specifying a delimiter" =
   [ "#EPAR: 0.1";
     "delimiter: '#'";
     "defaults:";
