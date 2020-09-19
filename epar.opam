@@ -17,7 +17,7 @@ depends: [
   "core" {< "v0.14"}
   "fileutils"
   "ppx_jane" {< "v0.14"}
-  "qcheck-core" {with-test & < "0.13"}
+  "qcheck-core" {with-test}
   "yaml" {>= "2.0.0"}
 ]
 build: [
