@@ -2,6 +2,8 @@ open Core
 
 open Prim
 
+let version = "0.1"
+
 let write_section_sub ~defaults (section : section) output_string : unit =
   let linebreak_default = get_linebreak defaults ~default:"\n"  in
   let linebreak = Result.(linebreak_default >>= (fun default -> get_linebreak section.metadata ~default)) |> Result.ok_or_failwith in
