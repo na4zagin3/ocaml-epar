@@ -172,6 +172,7 @@ let%expect_test "read_section: ok: text file without a trailing lf" =
 
 let write_archive ~basedir (archive : archive) : unit =
   let defaults = get_defaults archive.metadata |> Result.ok_or_failwith in
+  FileUtil.mkdir ~parent:true basedir;
   List.iter archive.sections ~f:(write_section ~basedir ~defaults)
 
 let delimiter_allowed sections delimiter =
