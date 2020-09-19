@@ -1,0 +1,8 @@
+ (test
+  (name
+    testcases
+  )
+  (preprocess (pps ppx_custom_printf))
+  (deps
+   (source_tree .))
+  (libraries epar fileutils shexp.process ounit2))

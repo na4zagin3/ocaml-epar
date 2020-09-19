@@ -1,0 +1,11 @@
+#EPAR: 0.1
+
+--- "a.txt"
+
+abc
+
+--- "b.txt"
+line-breaks-at-end: 0
+...
+
+abc
