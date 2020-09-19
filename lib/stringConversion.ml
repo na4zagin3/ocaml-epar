@@ -75,7 +75,7 @@ let to_string archive : string =
   let file_sections_with_leading_linebreak =
     if String.is_empty file_sections
     then ""
-    else "\n" ^ file_sections
+    else "\n" ^ file_sections ^ "\n"
   in
   "#EPAR: 0.1\n"
   ^ metadata
@@ -177,7 +177,7 @@ let%expect_test "parse_header: error: empty" =
 
 let parse_yaml_metadata part pos : string list -> Yaml.value StringMap.t result = function
   | [] -> Or_error.return (StringMap.empty, (pos, []))
-  | "" :: rest -> Or_error.return (StringMap.empty, (pos + 1, rest))
+  | ("" :: _) as rest -> Or_error.return (StringMap.empty, (pos, rest))
   | lines ->
     match List.split_while lines ~f:(fun x -> not (String.equal "..." x)) with
       | _, [] -> Or_error.error_string (Format.sprintf "line %d: Section metadata must be terminated with \"...\"" pos)
@@ -200,7 +200,7 @@ let%expect_test "parse_header_metadata: ok: beginning with an empty line" =
   |> parse_header_metadata 0
   |> [%sexp_of: Yaml.value StringMap.t result]
   |> Sexp.pp_hum Format.std_formatter;
-  [%expect{| (Ok (() (1 ("--- def: 2" "def: 2" ...)))) |}]
+  [%expect{| (Ok (() (0 ("" "--- def: 2" "def: 2" ...)))) |}]
 
 let%expect_test "parse_header_metadata: ok: with an object" =
   [ "abc: 1";
@@ -438,11 +438,17 @@ let%expect_test "parse_section_content: ok: non-last section with confusing line
   [%expect{|
     (Ok ((abc def "" "---! def.txt" abc --- "--- ghi.txt") (8 ("--- xyz.txt")))) |}]
 
+let parse_section_content_handling_leading_linebreak delimiter pos = function
+  | [] -> Or_error.return ([], (pos, []))
+  | "" :: rest ->
+    parse_section_content delimiter (pos + 1) rest
+  | str :: _ -> Or_error.error_string (Format.sprintf "line %d: An empty line required but got %S" pos str)
+
 let parse_section delimiter pos lines : section result =
   let pos_section = pos in
   Or_error.bind (parse_section_header delimiter pos lines) ~f:(fun (filename, (pos, lines)) ->
     Or_error.bind (parse_section_metadata pos lines) ~f:(fun (metadata, (pos, lines)) ->
-      Or_error.bind (parse_section_content delimiter pos lines) ~f:(fun (content, (pos, lines)) ->
+      Or_error.bind (parse_section_content_handling_leading_linebreak delimiter pos lines) ~f:(fun (content, (pos, lines)) ->
         let section = { location = Some { line = pos_section }; filename; metadata; content;} in
         Or_error.return (section, (pos, lines))
       )
@@ -515,17 +521,30 @@ let%expect_test "parse_section: ok: non-last section with metadata" =
     (Ok
      (((location (((line 0)))) (filename def.txt)
        (metadata ((line-break (String CR)) (line-breaks-at-end (Float 2))))
-       (content ("" abc def)))
+       (content (abc def)))
       (7 ("--- def.txt")))) |}]
+
+let rec skip_leading_linebreaks context ?(mandatory=0) ?(allow_eof=false) parser pos = function
+  | "" :: rest ->
+    if mandatory > 0
+    then skip_leading_linebreaks context ~mandatory:(mandatory - 1) parser (pos + 1) rest
+    else skip_leading_linebreaks context parser (pos + 1) rest
+  | str :: _ when mandatory > 0 ->
+    Or_error.error_string (Format.sprintf "line %d: %s: An empty line required but got %S" pos context str)
+  | [] when not allow_eof && mandatory > 0 ->
+    Or_error.error_string (Format.sprintf "line %d: %s: An empty line required but reached EOF" pos context)
+  | lines ->
+    parser pos lines
 
 let parse_sections delimiter pos lines : section list result =
   let rec sub acc pos : string list -> section list result = function
     | [] -> Or_error.return (List.rev acc, (pos, []))
+    | "" :: rest -> Or_error.return (List.rev acc, (pos + 1, rest))
     | lines ->
     Or_error.bind (parse_section delimiter pos lines) ~f:(fun (section, (pos, lines)) ->
       sub (section :: acc) pos lines
     ) in
-  sub [] pos lines
+  skip_leading_linebreaks "parse_sections" ~mandatory:1 ~allow_eof:true (sub []) pos lines
 
 let%expect_test "parse_sections: ok: various sections" =
   [ "--- abc.txt";
@@ -546,13 +565,8 @@ let%expect_test "parse_sections: ok: various sections" =
   |> [%sexp_of: section list result]
   |> Sexp.pp_hum Format.std_formatter;
   [%expect{|
-    (Ok
-     ((((location (((line 0)))) (filename abc.txt) (metadata ())
-        (content (abc def)))
-       ((location (((line 5)))) (filename def.txt)
-        (metadata ((line-break (String CR)) (line-breaks-at-end (Float 2))))
-        (content ("" abc def))))
-      (12 ()))) |}]
+    (Error
+     "line 0: parse_sections: An empty line required but got \"--- abc.txt\"") |}]
 
 let lift_std_result pos = function
   | Ok v -> Or_error.return v
@@ -616,7 +630,7 @@ let%expect_test "parse_archive: ok: without header metadata" =
           (content (abc def)))
          ((location (((line 7)))) (filename def.txt)
           (metadata ((line-break (String CR)) (line-breaks-at-end (Float 2))))
-          (content ("" abc def))))))
+          (content (abc def))))))
       (14 ()))) |}]
 
 let%expect_test "parse_archive: ok: specifying a delimiter" =
@@ -648,12 +662,43 @@ let%expect_test "parse_archive: ok: specifying a delimiter" =
      (((metadata
         ((defaults (O ((line-breaks-at-end (Float 1))))) (delimiter (String #))))
        (sections
-        (((location (((line 4)))) (filename abc.txt) (metadata ())
+        (((location (((line 5)))) (filename abc.txt) (metadata ())
           (content (abc def)))
          ((location (((line 10)))) (filename def.txt)
           (metadata ((line-break (String CR)) (line-breaks-at-end (Float 2))))
-          (content ("" abc def))))))
+          (content (abc def))))))
       (17 ()))) |}]
+
+let%expect_test "parse_archive: err: without a empty line between the epar header and file sections" =
+  [ "#EPAR: 0.1";
+    "--- abc.txt";
+    "";
+    "abc";
+    "def";
+  ]
+  |> parse_archive 0
+  |> [%sexp_of: archive result]
+  |> Sexp.pp_hum Format.std_formatter;
+  [%expect{|
+    (Error "line 1: Section metadata must be terminated with \"...\"") |}]
+
+let%expect_test "parse_archive: err: without a empty line between header metadata and file sections" =
+  [ "#EPAR: 0.1";
+    "delimiter: '#'";
+    "defaults:";
+    "    line-breaks-at-end: 1";
+    "...";
+    "# abc.txt";
+    "";
+    "abc";
+    "def";
+  ]
+  |> parse_archive 0
+  |> [%sexp_of: archive result]
+  |> Sexp.pp_hum Format.std_formatter;
+  [%expect{|
+    (Error
+     "line 4: parse_sections: An empty line required but got \"# abc.txt\"") |}]
 
 let of_string_or_error str : archive Or_error.t =
   let lines = String.split_lines str in
