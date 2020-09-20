@@ -39,6 +39,7 @@ end
 
 module EparTestcase (EparImpl : EparImpl) : sig
   val roundtrip_test : string -> string -> OUnitTest.test list
+  val malformed_test : string -> string -> OUnitTest.test list
 end = struct
   let run_preparation_script basedir =
     let open Shexp_process in
@@ -100,6 +101,32 @@ end = struct
         fun _test_ctxt -> Shexp_process.eval cmd
       ]
     else []
+
+  let malformed_test_sub basedir = begin
+    let archive_file = archive_filename basedir in
+
+    let archive =
+      In_channel.read_all archive_file
+      |> Epar.StringConversion.of_string_or_error
+    in
+    Or_error.is_error archive
+  end
+
+  let malformed_test testname basedir =
+    let cmd =
+      let open Shexp_process.Infix in
+      run_preparation_script basedir >>| fun () -> malformed_test_sub basedir
+    in
+    if FileUtil.(test Is_file (archive_filename basedir))
+    then
+      let open OUnit2 in
+      [ testname >::
+          fun _test_ctxt ->
+            assert_bool
+              (Printf.sprintf "Parsing succeeded while it should fail")
+              (Shexp_process.eval cmd)
+      ]
+    else []
 end
 
 module Epar0_1 = EparTestcase(Epar.Epar_0_1)
@@ -114,6 +141,7 @@ let ounit_suite =
       match String.split ~on:'-' testname with
       | _ when String.is_prefix ~prefix:"." testname -> []
       | "roundtrip" :: _ -> List.concat [Epar0_1.roundtrip_test testname basedir]
+      | "malformed" :: _ -> List.concat [Epar0_1.malformed_test testname basedir]
       | _ ->
         failwithf "testcase: unknown test case type %s\n" testname ()
   in

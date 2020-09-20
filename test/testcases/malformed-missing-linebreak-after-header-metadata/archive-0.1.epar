@@ -1,0 +1,9 @@
+#EPAR: 0.1
+delimiter: '---'
+defaults:
+    line-breaks-at-end: 1
+...
+--- abc.txt
+
+abc
+def
