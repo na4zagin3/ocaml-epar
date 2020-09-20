@@ -112,8 +112,8 @@ let ounit_suite =
   let testcase testname =
     let basedir = FilePath.concat testcases_basedir testname in
       match String.split ~on:'-' testname with
-      | "roundtrip" :: _ -> List.concat [Epar0_1.roundtrip_test testname basedir]
       | _ when String.is_prefix ~prefix:"." testname -> []
+      | "roundtrip" :: _ -> List.concat [Epar0_1.roundtrip_test testname basedir]
       | _ ->
         failwithf "testcase: unknown test case type %s\n" testname ()
   in
