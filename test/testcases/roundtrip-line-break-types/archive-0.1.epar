@@ -1,0 +1,20 @@
+#EPAR: 0.1
+
+--- "cr.txt"
+line-break: cr
+...
+
+abc
+def
+
+--- "crlf.txt"
+line-break: crlf
+...
+
+abc
+def
+
+--- "lf.txt"
+
+abc
+def
