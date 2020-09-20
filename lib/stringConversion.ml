@@ -77,12 +77,16 @@ let to_string archive : string =
     then ""
     else "\n" ^ file_sections ^ "\n"
   in
-  "#EPAR: 0.1\n"
+  let header = match archive.version with
+    | Prim.Epar_0_1 -> "#EPAR: 0.1\n"
+  in
+  header
   ^ metadata
   ^ file_sections_with_leading_linebreak
 
 let%expect_test "to_string: empty" =
   let archive = {
+    version = Prim.Epar_0_1;
     metadata = StringMap.empty;
     sections = [];
   } in
@@ -93,6 +97,7 @@ let%expect_test "to_string: empty" =
 
 let%expect_test "to_string: example without a header metadata" =
   let archive = {
+    version = Prim.Epar_0_1;
     metadata = StringMap.empty;
     sections = [example_section1; example_section2];
   } in
@@ -117,6 +122,7 @@ let%expect_test "to_string: example without a header metadata" =
 
 let%expect_test "to_string: example with a header metadata" =
   let archive = {
+    version = Prim.Epar_0_1;
     metadata = StringMap.of_alist_exn ["delimiter", `String "---"];
     sections = [example_section1; example_section2];
   } in
@@ -143,8 +149,8 @@ let%expect_test "to_string: example with a header metadata" =
 
 type 'a result = ('a * (int * string list)) Or_error.t [@@deriving sexp]
 
-let parse_header pos : string list -> unit result = function
-  | "#EPAR: 0.1" :: rest -> Or_error.return ((), (pos + 1, rest))
+let parse_header pos : string list -> Prim.version result = function
+  | "#EPAR: 0.1" :: rest -> Or_error.return (Prim.Epar_0_1, (pos + 1, rest))
   | str :: _ -> Or_error.error_string (Format.sprintf "line %d: Invalid header %S" pos str)
   | [] -> Or_error.error_string (Format.sprintf "line %d: Empty" pos)
 
@@ -154,9 +160,9 @@ let%expect_test "parse_header: ok" =
     "--- \"abc.txt\"";
   ]
   |> parse_header 0
-  |> [%sexp_of: unit result]
+  |> [%sexp_of: Prim.version result]
   |> Sexp.pp_hum Format.std_formatter;
-  [%expect{| (Ok (() (1 ("" "--- \"abc.txt\"")))) |}]
+  [%expect{| (Ok (0.1 (1 ("" "--- \"abc.txt\"")))) |}]
 
 let%expect_test "parse_header: error: empty" =
   [ "abc";
@@ -164,14 +170,14 @@ let%expect_test "parse_header: error: empty" =
     "--- \"abc.txt\"";
   ]
   |> parse_header 0
-  |> [%sexp_of: unit result]
+  |> [%sexp_of: Prim.version result]
   |> Sexp.pp_hum Format.std_formatter;
   [%expect{| (Error "line 0: Invalid header \"abc\"") |}]
 
 let%expect_test "parse_header: error: empty" =
   []
   |> parse_header 0
-  |> [%sexp_of: unit result]
+  |> [%sexp_of: Prim.version result]
   |> Sexp.pp_hum Format.std_formatter;
   [%expect{| (Error "line 0: Empty") |}]
 
@@ -573,11 +579,11 @@ let lift_std_result pos = function
   | Error msg -> Or_error.errorf "line %d: %s" pos msg
 
 let parse_archive pos lines : archive result =
-  Or_error.bind (parse_header pos lines) ~f:(fun ((), (pos, lines)) ->
+  Or_error.bind (parse_header pos lines) ~f:(fun (version, (pos, lines)) ->
     Or_error.bind (parse_header_metadata pos lines) ~f:(fun (metadata, (pos, lines)) ->
       Or_error.bind (get_delimiter metadata |> lift_std_result pos) ~f:(fun delimiter ->
         Or_error.map (parse_sections delimiter pos lines) ~f:(fun (sections, rest) ->
-          { metadata; sections }, rest
+          { version; metadata; sections }, rest
         )
       )
     )
@@ -590,7 +596,7 @@ let%expect_test "parse_archive: ok: empty" =
   |> [%sexp_of: archive result]
   |> Sexp.pp_hum Format.std_formatter;
   [%expect{|
-    (Ok (((metadata ()) (sections ())) (1 ()))) |}]
+    (Ok (((version 0.1) (metadata ()) (sections ())) (1 ()))) |}]
 
 let%expect_test "parse_archive: ok: empty with a trailing empty line" =
   [ "#EPAR: 0.1";
@@ -600,7 +606,7 @@ let%expect_test "parse_archive: ok: empty with a trailing empty line" =
   |> [%sexp_of: archive result]
   |> Sexp.pp_hum Format.std_formatter;
   [%expect{|
-    (Ok (((metadata ()) (sections ())) (2 ()))) |}]
+    (Ok (((version 0.1) (metadata ()) (sections ())) (2 ()))) |}]
 
 let%expect_test "parse_archive: ok: without header metadata" =
   [ "#EPAR: 0.1";
@@ -624,7 +630,7 @@ let%expect_test "parse_archive: ok: without header metadata" =
   |> Sexp.pp_hum Format.std_formatter;
   [%expect{|
     (Ok
-     (((metadata ())
+     (((version 0.1) (metadata ())
        (sections
         (((location (((line 2)))) (filename abc.txt) (metadata ())
           (content (abc def)))
@@ -659,7 +665,8 @@ let%expect_test "parse_archive: ok: specifying a delimiter" =
   |> Sexp.pp_hum Format.std_formatter;
   [%expect{|
     (Ok
-     (((metadata
+     (((version 0.1)
+       (metadata
         ((defaults (O ((line-breaks-at-end (Float 1))))) (delimiter (String #))))
        (sections
         (((location (((line 5)))) (filename abc.txt) (metadata ())

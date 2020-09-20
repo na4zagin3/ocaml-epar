@@ -2,7 +2,8 @@ open Core
 
 open Prim
 
-let version = "0.1"
+let version = Epar_0_1
+type t = Prim.archive
 
 let write_section_sub ~defaults (section : section) output_string : unit =
   let linebreak_default = get_linebreak defaults ~default:"\n"  in
@@ -172,7 +173,7 @@ let%expect_test "read_section: ok: text file without a trailing lf" =
     ((location ()) (filename test) (metadata ((line-breaks-at-end (Float 0))))
      (content (abc def ghi))) |}]
 
-let write_archive ~basedir (archive : archive) : unit =
+let extract_archive ~basedir (archive : archive) : unit =
   let defaults = get_defaults archive.metadata |> Result.ok_or_failwith in
   FileUtil.mkdir ~parent:true basedir;
   List.iter archive.sections ~f:(write_section ~basedir ~defaults)
@@ -186,7 +187,7 @@ let delimiter_allowed sections delimiter =
       then Continue_or_stop.Stop true
       else Continue_or_stop.Continue false)))
 
-let read_archive ~basedir filenames : archive =
+let create_archive ~basedir filenames : archive =
   let defaults = StringMap.empty in
   let sections = List.map filenames ~f:(fun fn -> read_section ~basedir ~defaults fn) in
   let delimiter_candidates =
@@ -201,4 +202,16 @@ let read_archive ~basedir filenames : archive =
   let metadata =
     [ Option.some_if (String.equal delimiter default_delimiter |> not) (header_metadata_delimiter_key, `String delimiter);
     ] |> List.map ~f:Option.to_list |> List.concat |> StringMap.of_alist_exn in
-  { metadata; sections; }
+  { version; metadata; sections; }
+
+let of_string_exn =
+  StringConversion.of_string_exn
+
+let to_string =
+  StringConversion.to_string
+
+let read_file_exn file =
+  In_channel.read_all file |> of_string_exn
+
+let write_file file archive =
+  Out_channel.write_all ~data:(to_string archive) file

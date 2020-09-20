@@ -31,16 +31,12 @@ let run_with_buffered_stdout_if_failed prog args =
     | _ -> false
   )
 
-module type EparImpl = sig
-  val read_archive : basedir:string -> string list -> Epar.Prim.archive
-  val write_archive : basedir:string -> Epar.Prim.archive -> unit
-  val version : string
-end
-
-module EparTestcase (EparImpl : EparImpl) : sig
+module EparTestcase (EparImpl : Epar.Prim.EparImpl) : sig
   val roundtrip_test : string -> string -> OUnitTest.test list
   val malformed_test : string -> string -> OUnitTest.test list
 end = struct
+  let version = Epar.Prim.string_of_version EparImpl.version
+
   let run_preparation_script basedir =
     let open Shexp_process in
     let open Shexp_process.Infix in
@@ -50,18 +46,18 @@ end = struct
         |> FilePath.make_absolute cwd
       in
       if FileUtil.(test Is_exec preparation_script_file)
-      then chdir (FilePath.dirname preparation_script_file) (run preparation_script_file [EparImpl.version])
+      then chdir (FilePath.dirname preparation_script_file) (run preparation_script_file [version])
       else return ()
     )
 
-  let archive_filename basedir = FilePath.concat basedir (Printf.sprintf "archive-%s.epar" EparImpl.version)
+  let archive_filename basedir = FilePath.concat basedir (Printf.sprintf "archive-%s.epar" version)
 
   let roundtrip_test_sub basedir = begin
     let archive_list_file = FilePath.concat basedir "files.txt" in
     let archive_file = archive_filename basedir in
     let contents_dir = FilePath.concat basedir "contents" in
-    let extracted_dir = FilePath.concat basedir (Printf.sprintf "contents-%s.gen" EparImpl.version) in
-    let archived_file = FilePath.concat basedir (Printf.sprintf "archive-%s.gen.epar" EparImpl.version) in
+    let extracted_dir = FilePath.concat basedir (Printf.sprintf "contents-%s.gen" version) in
+    let archived_file = FilePath.concat basedir (Printf.sprintf "archive-%s.gen.epar" version) in
 
     FileUtil.(rm ~recurse:true [extracted_dir; archived_file;]);
 
@@ -72,17 +68,16 @@ end = struct
 
     let archive_of_dir =
       let filenames = archive_list in
-      EparImpl.read_archive ~basedir:contents_dir filenames in
+      EparImpl.create_archive ~basedir:contents_dir filenames in
 
     let archive_of_file =
-      In_channel.read_all archive_file |> Epar.StringConversion.of_string_exn in
+      EparImpl.read_file_exn archive_file in
 
     let () =
-      EparImpl.write_archive ~basedir:extracted_dir archive_of_file in
+      EparImpl.extract_archive ~basedir:extracted_dir archive_of_file in
 
     let () =
-      let serialized_archive = Epar.StringConversion.to_string archive_of_dir in
-      Out_channel.write_all ~data:serialized_archive archived_file in
+      EparImpl.write_file archived_file archive_of_dir in
 
     let open Shexp_process.Infix in
     run_with_buffered_stdout_if_failed "diff" ["-u"; archive_file; archived_file]

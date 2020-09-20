@@ -172,20 +172,21 @@ let section : section QCheck.arbitrary =
   QCheck.make section_gen ?print:(Some print_section) ?shrink:(Some shrink_section)
 
 let archive : archive QCheck.arbitrary =
+  let version = Epar_0_1 in
   let archive_gen : archive QCheck.Gen.t = QCheck.Gen.(
-    map2 (fun metadata sections -> { metadata; sections; })
+    map2 (fun metadata sections -> { version; metadata; sections; })
       (string_map yaml).gen
       (list section_gen)
   ) in
   let print_archive v = Format.sprintf !"%{sexp:archive}" v in
   let shrink_archive : archive QCheck.Shrink.t = function
-    | { metadata; sections; } ->
+    | { version; metadata; sections; } ->
       let open QCheck.Shrink in
       let shrink_pair = pair
           (Option.value_exn (string_map yaml).shrink)
           (list ~shrink:shrink_section) in
       let open QCheck.Iter in
         shrink_pair (metadata, sections)
-          >|= (fun (metadata, sections) -> { metadata; sections; })
+          >|= (fun (metadata, sections) -> { version; metadata; sections; })
   in
   QCheck.make archive_gen ?print:(Some print_archive) ?shrink:(Some shrink_archive)
